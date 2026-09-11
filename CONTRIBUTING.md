@@ -50,9 +50,13 @@ python benchmarks/bench_gate.py --scale 0.15    # a quick pass while iterating
 
 Every number in the README comes from this script. If you change the allocator,
 the futility rule or the stopping boundary, re-run it and update the table,
-including when the result is worse. The per-batch allocation cap in
-[`allocator.py`](src/arbiter/scheduler/allocator.py) exists because removing it
-measured 19% more expensive, and that is the kind of thing the table is for.
+including when the result is worse.
+
+Two of the current design choices exist only because of that table. The per-batch
+allocation cap in [`allocator.py`](src/arbiter/scheduler/allocator.py) is there
+because removing it measured 19% more expensive. And the default allocator is
+plain round-robin because the greedy one, which is the more interesting piece of
+code, lost to it on both cost and power. Let the measurement pick.
 
 ## Style
 

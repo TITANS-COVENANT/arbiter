@@ -146,9 +146,8 @@ class GateConfig(BaseModel):
     on_inconclusive: Literal["pass", "fail", "warn"] = "warn"
     fail_on_any_flag: bool = True
     max_flagged_tasks: int = 0
-    allocator: Literal["cheapest-to-close", "round-robin", "successive-halving"] = (
-        "cheapest-to-close"
-    )
+    allocator: Literal["round-robin", "cheapest-to-close", "successive-halving"] = "round-robin"
+    """Even spend is the default because it measured best; see allocator.py."""
     max_infra_error_rate: float = 0.25
     """Above this share of unrunnable replicates the gate reports an error.
 

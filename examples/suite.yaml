@@ -87,6 +87,6 @@ budget:
   max_seconds: 600
 
 gate:
-  allocator: cheapest-to-close
+  allocator: round-robin
   on_inconclusive: warn
   max_infra_error_rate: 0.25

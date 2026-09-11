@@ -87,7 +87,7 @@ budget:
   # max_seconds: 900
 
 gate:
-  allocator: cheapest-to-close
+  allocator: round-robin
   on_inconclusive: warn
 """
 
@@ -334,7 +334,7 @@ def simulate(
         float, typer.Option("--coupling", help="How much seeding couples the two builds.")
     ] = 0.7,
     correction: Annotated[str, typer.Option("--correction")] = "e-bh",
-    allocator: Annotated[str, typer.Option("--allocator")] = "cheapest-to-close",
+    allocator: Annotated[str, typer.Option("--allocator")] = "round-robin",
     max_replicates: Annotated[int, typer.Option("--max-replicates")] = 150,
     json_out: Annotated[Path | None, typer.Option("--json")] = None,
 ) -> None:

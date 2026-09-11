@@ -6,10 +6,19 @@ replicates. Some are genuinely borderline and would eat the entire budget
 without ever deciding. A round-robin schedule spends the same on both, which
 means the borderline ones starve everything else.
 
-The default policy is to spend the next replicate wherever it is expected to
-close a decision soonest. That resolves the most tasks per dollar, and the tasks
-it defers are exactly the ones whose effect is too small to have shown up yet,
-which is the right thing to defer when the budget runs out.
+Three policies are provided, and the default is the boring one, because it
+measured best. On the benchmark's three-regressions scenario, spreading spend
+evenly used 2,900 replicates at 0.994 per-task power, while spending greedily
+where a decision was closest used 3,029 at 0.956. Greedy lost on both counts.
+
+The mechanism is worth understanding before reaching for the clever option. A
+greedy schedule defers the tasks furthest from deciding, and on a build that
+really did regress, those are the regressed-but-not-yet-obvious ones. It
+deprioritises exactly the tasks you are trying to find.
+
+Greedy still earns its place when per-task costs differ a lot, or when a hard
+budget ceiling means the run will be cut off and resolving the most tasks per
+dollar matters more than resolving the right ones.
 """
 
 from __future__ import annotations
@@ -64,11 +73,11 @@ def _warmup(states: Sequence[TaskState], min_replicates: int) -> list[TaskState]
 
 
 class RoundRobinAllocator:
-    """Equal spend across every undecided task.
+    """Equal spend across every undecided task. The default.
 
-    The baseline everyone starts with. Kept because it is the honest comparison
-    for the other two, and because it is genuinely the right choice when every
-    task costs the same and you intend to spend the whole budget anyway.
+    Sorting by replicate count means every task gets its k-th replicate before
+    any task gets its (k+1)-th, so the warmup is implicit and ``min_replicates``
+    is accepted only to keep the constructor uniform across allocators.
     """
 
     name = "round-robin"
@@ -92,6 +101,10 @@ class RoundRobinAllocator:
 
 class CheapestToCloseAllocator:
     """Spend where a decision is closest, after a fixed warmup.
+
+    Measured slightly worse than round-robin on a suite of equal-cost tasks, for
+    the reason given in the module docstring. Worth choosing when per-task costs
+    differ, or when a budget ceiling will cut the run short.
 
     The warmup matters. Before a task has any data its estimated distance to a
     boundary is made of prior, not evidence, and without a floor the allocator
@@ -203,8 +216,8 @@ class SuccessiveHalvingAllocator:
 
 
 def build_allocator(name: str, min_replicates: int = 4) -> Allocator:
-    if name == "round-robin":
-        return RoundRobinAllocator(min_replicates=min_replicates)
+    if name == "cheapest-to-close":
+        return CheapestToCloseAllocator(min_replicates=min_replicates)
     if name == "successive-halving":
         return SuccessiveHalvingAllocator(min_replicates=min_replicates)
-    return CheapestToCloseAllocator(min_replicates=min_replicates)
+    return RoundRobinAllocator(min_replicates=min_replicates)

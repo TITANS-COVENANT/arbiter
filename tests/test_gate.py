@@ -439,7 +439,11 @@ class TestAllocators:
             SuccessiveHalvingAllocator(keep_fraction=0.0)
 
     def test_unknown_name_falls_back_to_the_default(self):
-        assert build_allocator("nonsense").name == "cheapest-to-close"
+        assert build_allocator("nonsense").name == "round-robin"
+
+    def test_each_policy_is_reachable_by_name(self):
+        for name in ("round-robin", "cheapest-to-close", "successive-halving"):
+            assert build_allocator(name).name == name
 
 
 class TestBudgetTracker:

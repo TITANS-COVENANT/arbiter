@@ -43,7 +43,7 @@ class ScenarioSpec:
     min_replicates: int = 4
     max_replicates: int = 80
     correction: str = "e-bh"
-    allocator: str = "cheapest-to-close"
+    allocator: str = "round-robin"
     batch_size: int = 32
     max_replicates_budget: int | None = None
 

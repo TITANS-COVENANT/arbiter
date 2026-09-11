@@ -141,9 +141,16 @@ can cause a miss, and the cost is bounded: it adds at most
 flag, because it never flags anything.
 
 **The allocator.** Which task gets the next replicate is a scheduling decision.
-Any stopping rule is safe here for the same reason: FDR control constrains the
-set of *rejections*, and the schedule cannot manufacture a rejection. A bad
-schedule wastes money.
+It is safe for the same reason: FDR control constrains the set of *rejections*,
+and a schedule cannot manufacture a rejection. A bad schedule wastes money and
+loses power.
+
+It can lose more power than you would guess, which is why the default is the
+unclever one. Spending greedily on whichever task is closest to deciding sounds
+obviously right and measured worse on both cost and power, because on a build
+that really did regress, the tasks furthest from deciding are the
+regressed-but-not-yet-obvious ones. A greedy schedule deprioritises exactly what
+you are hunting. The numbers are in the README table.
 
 **Estimated remaining cost.** Used to rank tasks, computed from Wald's
 approximation with a Laplace-smoothed plug-in estimate. Wrong estimates make the
