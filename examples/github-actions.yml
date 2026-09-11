@@ -21,9 +21,9 @@ jobs:
       pull-requests: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
 
@@ -38,7 +38,7 @@ jobs:
       # to the candidate. arbiter hashes the target definition itself and stops
       # reusing runs when the baseline build actually changes.
       - name: Restore run store
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .arbiter
           key: arbiter-${{ hashFiles('evals/suite.yaml') }}-${{ github.run_id }}
@@ -68,7 +68,7 @@ jobs:
 
       - name: Comment on the pull request
         if: always() && github.event_name == 'pull_request'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const fs = require('fs');
@@ -87,7 +87,7 @@ jobs:
 
       - name: Upload artefacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: arbiter
           path: |
