@@ -15,3 +15,7 @@ build/
 .coverage
 htmlcov/
 .DS_Store
+
+# local secrets
+.env
+arbiter_hub.sqlite*

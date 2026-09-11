@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}{{ project.name }} &middot; arbiter hub{% endblock %}
+
+{% block content %}
+<div class="breadcrumb"><a href="/">Projects</a> / {{ project.org.slug }}</div>
+<div class="spread">
+  <div>
+    <h1>{{ project.name }}</h1>
+    <p class="small muted">
+      <span class="mono">{{ project.org.slug }}/{{ project.slug }}</span>
+      {%- if project.repo_full_name %} &middot; <a href="{{ project.repo_url }}">{{ project.repo_full_name }}</a>{% endif %}
+    </p>
+  </div>
+  <a class="btn" href="{{ url }}/settings">Settings</a>
+</div>
+
+{% if not runs %}
+  <div class="empty" style="margin-top:24px">
+    <p><strong>No runs yet.</strong></p>
+    <p class="small">Mint a token in settings and point your CI at this project.</p>
+    <p><a class="btn primary" href="{{ url }}/settings">Set up reporting</a></p>
+  </div>
+{% else %}
+
+<div class="grid cols-4" style="margin-top:22px">
+  <div class="stat">
+    <div class="label">Last verdict</div>
+    <div class="value"><span class="verdict {{ summary.last_run.verdict }}">{{ summary.last_run.verdict }}</span></div>
+    <div class="sub">{{ summary.last_run.created_at.strftime('%d %b %H:%M') }}</div>
+  </div>
+  <div class="stat">
+    <div class="label">Green</div>
+    <div class="value">{{ summary.pass_rate | pct }}</div>
+    <div class="sub">of the last {{ summary.runs_in_window }} runs</div>
+  </div>
+  <div class="stat">
+    <div class="label">Runs</div>
+    <div class="value">{{ summary.total_runs }}</div>
+    <div class="sub">all time</div>
+  </div>
+  <div class="stat">
+    <div class="label">Replicates reused</div>
+    <div class="value">{{ summary.reuse_rate | pct }}</div>
+    <div class="sub">cached baseline runs</div>
+  </div>
+</div>
+
+{% if chronic or flaky %}
+<h2>Needs attention</h2>
+<p class="lede">
+  These two lists mean different things. A chronic task is flagged nearly every
+  run and is not flipping, which is a regression that has been shipped and left.
+  A flaky task keeps changing its mind, which means its signal is unreliable
+  rather than its build.
+</p>
+<div class="grid cols-2">
+  <div class="panel">
+    <h3>Chronically flagged &middot; {{ chronic | length }}</h3>
+    {% if chronic %}
+      <ul class="plain">
+        {% for s in chronic %}
+        <li class="spread">
+          <a href="{{ url }}/tasks?id={{ s.task_id | urlencode }}" class="mono">{{ s.task_id }}</a>
+          <span class="small muted">flagged in {{ s.flagged }} of {{ s.runs }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+    {% else %}<p class="small muted">Nothing. Good.</p>{% endif %}
+  </div>
+  <div class="panel">
+    <h3>Flaky &middot; {{ flaky | length }}</h3>
+    {% if flaky %}
+      <ul class="plain">
+        {% for s in flaky %}
+        <li class="spread">
+          <a href="{{ url }}/tasks?id={{ s.task_id | urlencode }}" class="mono">{{ s.task_id }}</a>
+          <span class="small muted">changed its mind {{ s.flips }}x in {{ s.runs }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+    {% else %}<p class="small muted">Nothing. Good.</p>{% endif %}
+  </div>
+</div>
+{% endif %}
+
+<h2>Recent runs</h2>
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>When</th><th>Verdict</th><th>Source</th>
+        <th class="num">Flagged</th><th class="num">Tasks</th>
+        <th class="num">Replicates</th><th class="num">Cost</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for run in runs %}
+      <tr>
+        <td><a href="{{ url }}/runs/{{ run.id }}">{{ run.created_at.strftime('%d %b %H:%M') }}</a></td>
+        <td><span class="verdict {{ run.verdict }}">{{ run.verdict }}</span></td>
+        <td class="small">
+          {%- if run.pr_number %}PR #{{ run.pr_number }}
+          {%- elif run.branch %}{{ run.branch }}
+          {%- else %}&mdash;{% endif %}
+          {%- if run.commit_sha %} <span class="mono muted">{{ run.short_sha }}</span>{% endif %}
+        </td>
+        <td class="num">{{ run.n_flagged or '' }}</td>
+        <td class="num">{{ run.n_tasks }}</td>
+        <td class="num">{{ run.replicates_run }}</td>
+        <td class="num">{% if run.cost_usd %}${{ '%.2f' | format(run.cost_usd) }}{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<h2>Every task</h2>
+<p class="lede">
+  Across the last {{ summary.runs_in_window }} runs. Mean replicates is what each
+  decision costs; the expensive ones are usually worth a look at seeding.
+</p>
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Task</th><th>State</th>
+        <th class="num">Flagged</th><th class="num">Flips</th>
+        <th class="num">Mean replicates</th><th class="num">Last delta</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in stats %}
+      <tr>
+        <td><a href="{{ url }}/tasks?id={{ s.task_id | urlencode }}" class="mono">{{ s.task_id }}</a></td>
+        <td><span class="verdict {{ s.label }}">{{ s.label }}</span></td>
+        <td class="num">{{ s.flagged }}/{{ s.runs }}</td>
+        <td class="num">{{ s.flips }}</td>
+        <td class="num">{{ '%.0f' | format(s.mean_replicates) }}</td>
+        <td class="num">{{ s.last_delta | delta }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

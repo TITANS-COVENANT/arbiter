@@ -22,7 +22,7 @@ from rich.console import Console
 from . import __version__
 from .config import SuiteConfig, load_suite
 from .diff import diff_task
-from .gate.decide import run_gate
+from .gate.decide import GateResult, run_gate
 from .report import (
     render_console,
     render_diff_console,
@@ -209,6 +209,18 @@ def gate(
     ] = None,
     verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Show every task.")] = False,
     quiet: Annotated[bool, typer.Option("--quiet", "-q", help="Only set the exit code.")] = False,
+    publish: Annotated[
+        str | None,
+        typer.Option("--publish", help="Base URL of an arbiter hub to report this run to."),
+    ] = None,
+    publish_token: Annotated[
+        str | None,
+        typer.Option(
+            "--publish-token",
+            envvar="ARBITER_HUB_TOKEN",
+            help="Project token for the hub. Prefer the environment variable in CI.",
+        ),
+    ] = None,
 ) -> None:
     """Compare the candidate against the baseline and set an exit code.
 
@@ -246,7 +258,30 @@ def gate(
     if json_out:
         json_out.write_text(json.dumps(result.to_dict(), indent=2), encoding="utf-8")
 
+    if publish:
+        _publish(result, publish, publish_token or "", quiet=quiet)
+
     raise typer.Exit(code=result.exit_code)
+
+
+def _publish(result: GateResult, base_url: str, token: str, *, quiet: bool) -> None:
+    """Report the run to a hub, and never let that change the verdict.
+
+    A dashboard being unreachable says nothing about the candidate build, so a
+    failure here is printed and dropped. The exit code below is decided by the
+    statistics, not by whether the network cooperated.
+    """
+    from .publish import publish_result
+
+    outcome = publish_result(result.to_dict(), base_url=base_url, token=token)
+    if outcome.ok:
+        if not quiet:
+            console.print(f"[dim]published to[/dim] {outcome.url}")
+        return
+    # Reported even under --quiet. Reporting that has silently stopped working
+    # is worse than reporting that never worked, because the dashboard keeps
+    # showing yesterday's history as though it were current.
+    err_console.print(f"[yellow]could not publish this run:[/yellow] {outcome.error}")
 
 
 @app.command()

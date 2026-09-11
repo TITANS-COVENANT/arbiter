@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}{{ status }} &middot; arbiter hub{% endblock %}
+
+{% block content %}
+<div style="padding:56px 0;max-width:56ch">
+  <h1>{{ status }}</h1>
+  <p class="lede">{{ detail }}</p>
+  <div class="row"><a class="btn" href="/">Back to projects</a></div>
+</div>
+{% endblock %}

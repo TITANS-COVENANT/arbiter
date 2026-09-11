@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}arbiter hub{% endblock %}
+
+{% block content %}
+<section class="hero">
+  <h1>Your eval gate has a memory now.</h1>
+  <p>
+    <code>arbiter gate</code> tells you whether today's build regressed. What it
+    cannot tell you, because it only ever sees one run, is that the task which
+    just went red has been flipping every other run since March. This does.
+  </p>
+  <div class="row">
+    <a class="btn primary" href="/login">Sign in with GitHub</a>
+    <a class="btn" href="https://github.com/TITANS-COVENANT/arbiter">Read the docs</a>
+  </div>
+  <p class="small muted" style="margin-top:14px">
+    Your API keys and your agent stay in your CI. Only the verdict is posted here.
+  </p>
+</section>
+
+<div class="grid cols-3" style="margin-top:44px">
+  <div class="panel">
+    <h3>Flaky or just broken</h3>
+    <p class="small muted">
+      A task that alternates between flagged and clear has an unstable signal. One
+      that is flagged nearly every time is a regression nobody fixed. Those want
+      different responses, so they are counted separately rather than piled into a
+      single list of unreliable tests.
+    </p>
+  </div>
+  <div class="panel">
+    <h3>Is this actually new</h3>
+    <p class="small muted">
+      Every task keeps its own row for every run, so opening one shows how it has
+      behaved across the last fifty. Red for the fourth run running is a different
+      conversation from red for the first time.
+    </p>
+  </div>
+  <div class="panel">
+    <h3>Where the replicates go</h3>
+    <p class="small muted">
+      Cost per decision, per task. The expensive ones are usually the ones where a
+      seed is not being threaded through properly, and that is the cheapest thing
+      on the list to fix.
+    </p>
+  </div>
+</div>
+
+<h2>Wiring it up</h2>
+<p class="lede">
+  Two flags on the job you already have. The gate keeps running in your CI, where
+  your credentials already live.
+</p>
+<pre>- name: eval gate
+  run: |
+    arbiter gate evals/suite.yaml \
+      --store .arbiter/runs.sqlite \
+      --publish {{ settings.base_url }} \
+      --publish-token $ARBITER_HUB_TOKEN</pre>
+<p class="small muted">
+  The exit code still comes from the gate, so a regression still fails the job.
+  Publishing is additive, and a hub that is down will not fail your build.
+</p>
+{% endblock %}

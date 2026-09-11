@@ -29,7 +29,7 @@ jobs:
           pip install -e ".[dev]"
 
       - name: Lint
-        run: ruff check src tests benchmarks examples
+        run: ruff check src tests tests_hub benchmarks examples
 
       - name: Types
         run: mypy
@@ -120,3 +120,72 @@ jobs:
           if wrong:
               sys.exit(f"unaffected tasks were flagged in error: {sorted(wrong)}")
           PY
+
+  hub:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[web]"
+
+      # Exercises the two halves against each other: the hub accepts a real
+      # gate result, and `arbiter gate --publish` is what sends it. Mocking
+      # either side would test the mock.
+      - name: The gate publishes to the hub end to end
+        run: |
+          set -e
+          export ARBITER_HUB_DATABASE_URL="sqlite:///$PWD/ci.sqlite"
+          export ARBITER_HUB_BASE_URL="http://127.0.0.1:8099"
+          export ARBITER_HUB_DEV_AUTH=1
+
+          TOKEN=$(arbiter-hub demo --runs 3 | sed -n 's/^ARBITER_HUB_TOKEN=//p')
+          if [ -z "$TOKEN" ]; then echo "demo did not mint a token"; exit 1; fi
+
+          arbiter-hub serve --port 8099 &
+          for _ in $(seq 1 40); do
+            curl -sf http://127.0.0.1:8099/health >/dev/null && break
+            sleep 0.5
+          done
+          curl -sf http://127.0.0.1:8099/health
+
+          # The example suite contains a planted regression, so this exits 1.
+          set +e
+          arbiter gate examples/suite.yaml --quiet             --publish http://127.0.0.1:8099 --publish-token "$TOKEN"
+          code=$?
+          set -e
+          if [ "$code" -ne 1 ]; then
+            echo "expected the gate to exit 1 (regressions found), got $code"
+            exit 1
+          fi
+
+          curl -sf http://127.0.0.1:8099/api/v1/runs/4             -H "Authorization: Bearer $TOKEN" -o published.json
+          python - <<'PY'
+          import json, sys
+          run = json.load(open("published.json"))
+          flagged = sorted(t["task_id"] for t in run["tasks"] if t["flagged"])
+          print("verdict:", run["verdict"], "flagged:", flagged)
+          if run["verdict"] != "fail":
+              sys.exit(f"expected a failing verdict, got {run['verdict']}")
+          if "ceo_tenure" not in flagged:
+              sys.exit("the published run lost its flagged tasks")
+          PY
+
+      - name: A hub that is down must not fail the build
+        run: |
+          set +e
+          arbiter gate examples/suite.yaml --quiet             --publish http://127.0.0.1:1 --publish-token arb_unreachable
+          code=$?
+          set -e
+          # 1 means "regressions found", which is the gate's own verdict. Any
+          # other code would mean the unreachable hub changed the outcome.
+          if [ "$code" -ne 1 ]; then
+            echo "an unreachable hub changed the exit code to $code"
+            exit 1
+          fi

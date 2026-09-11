@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}New project &middot; arbiter hub{% endblock %}
+
+{% block content %}
+<div class="breadcrumb"><a href="/">Projects</a> / New</div>
+<h1>New project</h1>
+<p class="lede">
+  One project per eval suite. Usually that means one per repository, but if you
+  gate two different suites in the same repo, give them a project each so their
+  histories do not get mixed together.
+</p>
+
+{% if error %}<div class="banner fail"><div class="headline">{{ error }}</div></div>{% endif %}
+
+<form method="post" action="/projects/new" class="panel" style="max-width:560px">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+
+  <label for="name">Name
+    <span class="hint">Shown in the dashboard. The URL slug comes from this.</span>
+  </label>
+  <input type="text" id="name" name="name" required maxlength="200" placeholder="Support agent evals">
+
+  <label for="org_id">Organisation</label>
+  <select id="org_id" name="org_id" required>
+    {% for org in orgs %}<option value="{{ org.id }}">{{ org.name }} ({{ org.slug }})</option>{% endfor %}
+  </select>
+
+  <label for="repo_full_name">GitHub repository <span class="muted">optional</span>
+    <span class="hint">owner/name. Used to link runs back to commits and pull requests.</span>
+  </label>
+  <input type="text" id="repo_full_name" name="repo_full_name" maxlength="200" placeholder="acme/support-agent">
+
+  <div class="row end" style="margin-top:20px">
+    <a class="btn" href="/">Cancel</a>
+    <button class="btn primary" type="submit">Create project</button>
+  </div>
+</form>
+{% endblock %}

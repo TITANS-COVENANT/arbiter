@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}Run {{ run.id }} &middot; {{ project.name }}{% endblock %}
+
+{% block content %}
+<div class="breadcrumb">
+  <a href="/">Projects</a> / <a href="{{ url }}">{{ project.name }}</a> / Run {{ run.id }}
+</div>
+
+<div class="banner {{ run.verdict }}">
+  <div class="headline">
+    {% if run.verdict == 'fail' %}Regressions found
+    {% elif run.verdict == 'error' %}The gate could not run reliably
+    {% elif run.verdict == 'warn' %}No regressions found, but the run was cut short
+    {% else %}No regressions found{% endif %}
+  </div>
+  <div class="facts">
+    {{ run.n_flagged }} flagged of {{ run.n_tasks }} tasks &middot;
+    {{ run.replicates_run }} replicates run{% if run.replicates_reused %}, {{ run.replicates_reused }} reused{% endif %}
+    {%- if run.cost_usd %} &middot; ${{ '%.2f' | format(run.cost_usd) }}{% endif %}
+    {%- if run.wall_seconds %} &middot; {{ '%.0f' | format(run.wall_seconds) }}s{% endif %}
+  </div>
+</div>
+
+<div class="grid cols-4">
+  <div class="stat">
+    <div class="label">When</div>
+    <div class="value small" style="font-size:16px">{{ run.created_at.strftime('%d %b %Y') }}</div>
+    <div class="sub">{{ run.created_at.strftime('%H:%M UTC') }}</div>
+  </div>
+  <div class="stat">
+    <div class="label">Source</div>
+    <div class="value small" style="font-size:16px">
+      {% if run.pr_number %}PR #{{ run.pr_number }}{% elif run.branch %}{{ run.branch }}{% else %}&mdash;{% endif %}
+    </div>
+    <div class="sub mono">{{ run.short_sha or '' }}</div>
+  </div>
+  <div class="stat">
+    <div class="label">Correction</div>
+    <div class="value small" style="font-size:16px">{{ run.correction or '&mdash;' | safe }}</div>
+    <div class="sub">alpha {{ run.alpha }}</div>
+  </div>
+  <div class="stat">
+    <div class="label">Evidence needed</div>
+    <div class="value small" style="font-size:16px">e &ge; {{ '%.0f' | format(run.evidence_threshold) }}</div>
+    <div class="sub">for one task alone</div>
+  </div>
+</div>
+
+{% if run.ci_url %}
+<p class="small" style="margin-top:14px"><a href="{{ run.ci_url }}" rel="noopener noreferrer">View the CI job</a></p>
+{% endif %}
+
+{% if run.notes %}
+<h2>Notes from the gate</h2>
+<ul class="plain panel">
+  {% for note in run.notes %}<li class="small">{{ note }}</li>{% endfor %}
+</ul>
+{% endif %}
+
+{% if flagged %}
+<h2>Flagged as regressed</h2>
+<p class="lede">
+  <em>Broke</em> counts replicates where the baseline passed and the candidate
+  failed at the same seed. <em>Fixed</em> counts the reverse. Only those carry
+  information about the change.
+</p>
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Task</th><th class="num">Baseline</th><th class="num">Candidate</th>
+        <th class="num">Broke</th><th class="num">Fixed</th>
+        <th class="num">Replicates</th><th class="num">e-value</th><th class="num">Adjusted p</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for t in flagged %}
+      <tr>
+        <td><a href="{{ url }}/tasks?id={{ t.task_id | urlencode }}" class="mono">{{ t.task_id }}</a></td>
+        <td class="num">{{ t.baseline_rate | pct }}</td>
+        <td class="num">{{ t.candidate_rate | pct }}</td>
+        <td class="num">{{ t.regressions }}</td>
+        <td class="num">{{ t.improvements }}</td>
+        <td class="num">{{ t.replicates }}</td>
+        <td class="num">{{ '%.0f' | format(t.e_value) }}</td>
+        <td class="num">{{ '%.4f' | format(t.adjusted_p) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<h2>All tasks</h2>
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Task</th><th>Verdict</th><th>Stopped because</th>
+        <th class="num">Replicates</th><th class="num">Broke</th><th class="num">Fixed</th><th class="num">Delta</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for t in tasks %}
+      <tr>
+        <td><a href="{{ url }}/tasks?id={{ t.task_id | urlencode }}" class="mono">{{ t.task_id }}</a></td>
+        <td>
+          {% if t.flagged %}<span class="verdict fail">regression</span>
+          {% elif t.verdict == 'pass' %}<span class="verdict pass">cleared</span>
+          {% else %}<span class="verdict stable">no evidence</span>{% endif %}
+        </td>
+        <td class="small muted">{{ t.stop_reason or '&mdash;' | safe }}</td>
+        <td class="num">{{ t.replicates }}</td>
+        <td class="num">{{ t.regressions }}</td>
+        <td class="num">{{ t.improvements }}</td>
+        <td class="num">{{ t.delta | delta }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
