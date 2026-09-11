@@ -1,0 +1,92 @@
+# A worked suite against examples/target_agent.py, which needs no API key.
+#
+# Run it from the repository root:
+#
+#     arbiter gate examples/suite.yaml
+#
+# The candidate build truncates retrieved context to one passage. The two
+# multi-hop tasks need two facts, so they fail outright. `current_ceo` needs one
+# fact but its top two passages tie on score, so it breaks about half the time and
+# gets flagged too. The other three retrieve unambiguously and come back clean.
+name: northwind-qa
+
+# Changing the salt reseeds every replicate in the suite, which discards the
+# cached runs. Bump it when you want a genuinely fresh sample.
+seed_salt: v1
+store: .arbiter/northwind.sqlite
+
+tasks:
+  - id: founded_year
+    tags: [single-hop]
+    input:
+      question: "When was Northwind founded?"
+      needs: [founded]
+
+  - id: current_ceo
+    tags: [single-hop]
+    input:
+      question: "Who is the chief executive of Northwind?"
+      needs: [ceo]
+
+  - id: headquarters_move
+    tags: [single-hop]
+    input:
+      question: "Where did Northwind move its head office?"
+      needs: [hq]
+
+  - id: revenue_2023
+    tags: [single-hop]
+    input:
+      question: "What revenue did Northwind report in 2023?"
+      needs: [revenue]
+
+  - id: ceo_tenure
+    tags: [multi-hop]
+    input:
+      question: "How long has the Northwind chief executive been in post?"
+      needs: [ceo, ceo_start]
+
+  - id: revenue_per_head
+    tags: [multi-hop]
+    input:
+      question: "What was Northwind revenue per employee in 2023?"
+      needs: [revenue, staff]
+
+# The subprocess adapter is used here because it works from a clean checkout with
+# no import-path setup. For a real suite prefer the in-process form, which avoids
+# a Python startup per replicate:
+#
+#   baseline:
+#     kind: python
+#     ref: my_evals:baseline
+#
+baseline:
+  kind: subprocess
+  command: ["python", "examples/target_agent.py", "--build", "baseline"]
+  concurrency: 12
+  timeout_s: 30
+
+candidate:
+  kind: subprocess
+  command: ["python", "examples/target_agent.py", "--build", "candidate"]
+  concurrency: 12
+  timeout_s: 30
+
+stats:
+  alpha: 0.05          # false discovery rate across the whole suite
+  beta: 0.10           # miss rate for a regression of the size below
+  mde: 0.15            # smallest pass-rate drop worth catching, used for planning
+  odds_ratio: 3.0      # flag when new failures outnumber newly fixed ones 3:1
+  min_replicates: 4
+  max_replicates: 200
+  correction: e-bh
+  futility_confidence: 0.01
+
+budget:
+  batch_size: 24
+  max_seconds: 600
+
+gate:
+  allocator: cheapest-to-close
+  on_inconclusive: warn
+  max_infra_error_rate: 0.25

@@ -1,0 +1,122 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Lint
+        run: ruff check src tests benchmarks examples
+
+      - name: Types
+        run: mypy
+
+      - name: Tests
+        run: pytest -q
+
+  # The statistical claims are the product, so the suite that checks them by
+  # simulation runs on its own and is allowed to be slow.
+  error-rates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: False-flag rate on a build where nothing changed
+        run: |
+          arbiter simulate --trials 40 --tasks 20 --regressed 0 \
+            --max-replicates 150 --json null.json
+          python - <<'PY'
+          import json, sys
+          result = json.load(open("null.json"))
+          print(f"false discovery rate: {result['fdr']:.4f}")
+          print(f"trials with any false flag: {result['any_false_flag_rate']:.4f}")
+          if result["fdr"] > 0.15:
+              sys.exit(f"FDR {result['fdr']:.3f} is far above the 0.05 bound")
+          PY
+
+      - name: Detection rate on a build with real regressions
+        run: |
+          arbiter simulate --trials 40 --tasks 20 --regressed 3 \
+            --max-replicates 150 --json alt.json
+          python - <<'PY'
+          import json, sys
+          result = json.load(open("alt.json"))
+          print(f"builds blocked: {result['detection_rate']:.4f}")
+          if result["detection_rate"] < 0.80:
+              sys.exit(f"detection rate {result['detection_rate']:.3f} is too low")
+          PY
+
+  example:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e "."
+
+      - name: The example suite should find its planted regression
+        run: |
+          set +e
+          arbiter gate examples/suite.yaml --json result.json --quiet
+          code=$?
+          set -e
+          if [ "$code" -ne 1 ]; then
+            echo "expected exit code 1 (regressions found), got $code"
+            exit 1
+          fi
+          python - <<'PY'
+          import json, sys
+          result = json.load(open("result.json"))
+          flagged = {t["task_id"] for t in result["tasks"] if t["flagged"]}
+          print("flagged:", sorted(flagged))
+          # The target is deterministic given the seed, so this is an exact
+          # expectation rather than a tolerance. ceo_tenure and revenue_per_head
+          # need two facts; current_ceo needs one but its top two passages tie on
+          # retrieval score, so truncating to one breaks it too.
+          must_flag = {"ceo_tenure", "revenue_per_head", "current_ceo"}
+          must_not_flag = {"founded_year", "headquarters_move", "revenue_2023"}
+          missing = must_flag - flagged
+          if missing:
+              sys.exit(f"these regressions were not found: {sorted(missing)}")
+          wrong = flagged & must_not_flag
+          if wrong:
+              sys.exit(f"unaffected tasks were flagged in error: {sorted(wrong)}")
+          PY
