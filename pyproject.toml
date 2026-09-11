@@ -30,28 +30,45 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+web = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.30",
+  "jinja2>=3.1",
+  "sqlalchemy>=2.0",
+  "pydantic-settings>=2.3",
+  "itsdangerous>=2.2",
+  "python-multipart>=0.0.9",
+]
 dev = [
   "pytest>=8.2",
   "pytest-asyncio>=0.23",
   "ruff>=0.5",
   "mypy>=1.10",
   "types-PyYAML",
+  "arbiter-eval[web]",
 ]
 
 [project.scripts]
 arbiter = "arbiter.cli:app"
+arbiter-hub = "arbiter_hub.cli:app"
 
 [project.urls]
 Homepage = "https://github.com/TITANS-COVENANT/arbiter"
 Issues = "https://github.com/TITANS-COVENANT/arbiter/issues"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/arbiter"]
+packages = ["src/arbiter", "src/arbiter_hub"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "tests_hub"]
 asyncio_mode = "auto"
-filterwarnings = ["error::DeprecationWarning"]
+filterwarnings = [
+  # Our own deprecations are errors, deliberately.
+  "error::DeprecationWarning",
+  # Starlette's TestClient touches a deprecated anyio alias at import time.
+  # Not ours to fix, and not worth weakening the rule above for.
+  "ignore:The anyio.abc.BlockingPortal alias is deprecated:DeprecationWarning",
+]
 
 [tool.ruff]
 line-length = 100
@@ -64,7 +81,7 @@ ignore = ["B008", "RUF001"]
 
 [tool.mypy]
 python_version = "3.11"
-packages = ["arbiter"]
+packages = ["arbiter", "arbiter_hub"]
 mypy_path = "src"
 strict = false
 warn_unused_ignores = true

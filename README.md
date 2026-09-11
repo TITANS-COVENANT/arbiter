@@ -357,6 +357,48 @@ the part that can break quietly. They are not a claim about your suite. Run
 `arbiter simulate --regressed 0` with your own task count and error budget before
 letting this block anyone's pull request.
 
+## arbiter hub: the web app
+
+`arbiter gate` sees one run. Some questions need a history, and those are the
+ones people actually argue about in a pull request: has this task been flipping
+all month, is the red actually new, which tasks are eating the budget.
+
+So the repo also ships a web service your CI reports into. The gate keeps running
+where it runs now, with your credentials, and only the verdict is posted.
+
+```bash
+pip install -e ".[web]"
+arbiter-hub demo            # seed a project with synthetic history
+arbiter-hub serve --dev     # http://127.0.0.1:8000
+```
+
+Then two flags on the job you already have:
+
+```yaml
+- name: eval gate
+  env:
+    ARBITER_HUB_TOKEN: ${{ secrets.ARBITER_HUB_TOKEN }}
+  run: |
+    arbiter gate evals/suite.yaml --store .arbiter/runs.sqlite       --publish https://your-hub.example.com
+```
+
+Publishing cannot change your exit code. A hub that is down says nothing about
+your candidate build, so every failure there is reported and swallowed.
+
+**The distinction it is built around.** Two tasks can both look unreliable and
+need opposite responses. One that alternates between flagged and clear has an
+unstable signal, and either its seed is not reaching everything random or it
+should not be gating anything. One that is flagged nearly every run and does not
+flip is a regression that shipped and stayed. Calling both of them flaky is how a
+real regression gets ignored, so they are counted and labelled separately.
+
+FastAPI, server-rendered Jinja, SQLAlchemy, SQLite or Postgres. Sign-in is GitHub
+OAuth, and the access token is used once to read your profile and then thrown
+away, because nothing here needs to touch your repositories. API tokens are
+stored hashed and shown once.
+
+Setup, the security model and the API are in [docs/hub.md](docs/hub.md).
+
 ## What it does not do
 
 **Prove two builds are equivalent.** When arbiter reports "no evidence of a
@@ -389,7 +431,14 @@ src/arbiter/
   diff/        trajectory alignment and failure-mode clustering
   report/      console, Markdown, JUnit XML
   sim/         synthetic agent with known truth, and the Monte Carlo harness
-docs/          statistics, architecture, quickstart
+  publish.py   posting a result to a hub, without ever failing a build
+src/arbiter_hub/
+  models.py    users, orgs, projects, tokens, runs, per-task rows
+  analytics.py flaky versus chronic, and what each decision costs
+  auth.py      GitHub OAuth; the token is read once and never stored
+  ingest.py    validating a result that arrived from someone else's CI
+  views.py     server-rendered pages
+docs/          statistics, architecture, quickstart, hub
 benchmarks/    the script every number above came from
 ```
 
@@ -399,7 +448,7 @@ benchmarks/    the script every number above came from
 
 ```bash
 pip install -e ".[dev]"
-pytest -q                                    # 222 tests, about 45s
+pytest -q                                    # 274 tests, about 40s
 ruff check src tests benchmarks examples
 mypy
 python benchmarks/bench_gate.py --scale 0.15 # quick pass
