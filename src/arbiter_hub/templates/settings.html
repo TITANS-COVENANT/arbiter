@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}Settings &middot; {{ project.name }}{% endblock %}
+
+{% block content %}
+<div class="breadcrumb">
+  <a href="/">Projects</a> / <a href="{{ url }}">{{ project.name }}</a> / Settings
+</div>
+<h1>Settings</h1>
+
+{% if just_created %}
+<div class="banner pass">
+  <div class="headline">Project created</div>
+  <div class="facts">Mint a token below, then add the two flags to your CI job.</div>
+</div>
+{% endif %}
+
+{% if fresh_token %}
+<div class="banner warn">
+  <div class="headline">Copy this token now</div>
+  <div class="facts">
+    It is stored hashed, so this is the only time it can be shown. Losing it means
+    minting a new one, which is cheap.
+  </div>
+</div>
+<pre class="token">{{ fresh_token }}</pre>
+{% endif %}
+
+<h2>Reporting from CI</h2>
+<p class="lede">
+  The gate keeps running where it runs now. These flags post the verdict here
+  afterwards; the exit code is unchanged, so a regression still fails the job.
+</p>
+<pre>arbiter gate evals/suite.yaml \
+  --store .arbiter/runs.sqlite \
+  --publish {{ settings.base_url }} \
+  --publish-token $ARBITER_HUB_TOKEN</pre>
+
+<p class="small muted">Or without the CLI, if you would rather post it yourself:</p>
+<pre>curl -sS -X POST {{ ingest_url }} \
+  -H "Authorization: Bearer $ARBITER_HUB_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"result\": $(cat arbiter-result.json)}"</pre>
+
+<h2>Tokens</h2>
+<p class="lede">
+  One per CI environment is a good habit: revoking a leaked token then costs you
+  one pipeline rather than all of them.
+</p>
+
+<form method="post" action="{{ url }}/tokens" class="panel" style="max-width:560px">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label for="token_name">Name
+    <span class="hint">Something you will recognise in six months. "github-actions", "staging".</span>
+  </label>
+  <div class="row">
+    <input type="text" id="token_name" name="name" value="github-actions" maxlength="120" style="flex:1">
+    <button class="btn primary" type="submit">Create token</button>
+  </div>
+</form>
+
+{% if tokens %}
+<div class="table-wrap" style="margin-top:16px">
+  <table>
+    <thead>
+      <tr><th>Name</th><th>Token</th><th>Created</th><th>Last used</th><th>State</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for token in tokens %}
+      <tr>
+        <td>{{ token.name }}</td>
+        <td class="mono muted">{{ token.prefix }}&hellip;</td>
+        <td class="small">{{ token.created_at.strftime('%d %b %Y') }}</td>
+        <td class="small">
+          {% if token.last_used_at %}{{ token.last_used_at.strftime('%d %b %H:%M') }}
+          {% else %}<span class="muted">never</span>{% endif %}
+        </td>
+        <td>
+          {% if token.is_active %}<span class="verdict pass">active</span>
+          {% else %}<span class="verdict stable">revoked</span>{% endif %}
+        </td>
+        <td>
+          {% if token.is_active %}
+          <form method="post" action="{{ url }}/tokens/{{ token.id }}/revoke" style="margin:0">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <button class="btn small danger" type="submit">Revoke</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<h2>Project</h2>
+<div class="panel" style="max-width:560px">
+  <ul class="plain small">
+    <li class="spread"><span class="muted">Name</span><span>{{ project.name }}</span></li>
+    <li class="spread"><span class="muted">Slug</span><span class="mono">{{ project.org.slug }}/{{ project.slug }}</span></li>
+    <li class="spread"><span class="muted">Repository</span>
+      <span>{% if project.repo_full_name %}<a href="{{ project.repo_url }}">{{ project.repo_full_name }}</a>{% else %}<span class="muted">not set</span>{% endif %}</span>
+    </li>
+    <li class="spread"><span class="muted">Created</span><span>{{ project.created_at.strftime('%d %b %Y') }}</span></li>
+  </ul>
+</div>
+
+<h2>Delete this project</h2>
+<p class="lede">
+  Takes every run and every task row with it, and there is no undo. Type
+  <span class="mono">{{ project.slug }}</span> to confirm.
+</p>
+<form method="post" action="{{ url }}/delete" class="panel" style="max-width:560px">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <div class="row">
+    <input type="text" name="confirm" placeholder="{{ project.slug }}" style="flex:1" autocomplete="off">
+    <button class="btn danger" type="submit">Delete permanently</button>
+  </div>
+</form>
+{% endblock %}

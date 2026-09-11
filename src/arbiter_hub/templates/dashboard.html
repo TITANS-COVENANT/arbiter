@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Projects &middot; arbiter hub{% endblock %}
+
+{% block content %}
+<div class="spread">
+  <div>
+    <h1>Projects</h1>
+    <p class="lede">Suites reporting into this account.</p>
+  </div>
+  <a class="btn primary" href="/projects/new">New project</a>
+</div>
+
+{% if not cards %}
+  <div class="empty">
+    <p><strong>Nothing reporting yet.</strong></p>
+    <p class="small">
+      Create a project, mint a token, and add two flags to the CI job that already
+      runs your gate.
+    </p>
+    <p><a class="btn primary" href="/projects/new">Create your first project</a></p>
+  </div>
+{% else %}
+  <div class="grid cols-2">
+    {% for card in cards %}
+      {% set s = card.summary %}
+      <a class="panel" href="{{ card.url }}" style="color:inherit">
+        <div class="spread">
+          <strong>{{ card.project.name }}</strong>
+          {% if s.last_run %}
+            <span class="verdict {{ s.last_run.verdict }}">{{ s.last_run.verdict }}</span>
+          {% else %}
+            <span class="verdict stable">no runs</span>
+          {% endif %}
+        </div>
+        <div class="small muted" style="margin-top:2px">
+          {{ card.project.org.slug }}/{{ card.project.slug }}
+          {%- if card.project.repo_full_name %} &middot; {{ card.project.repo_full_name }}{% endif %}
+        </div>
+        {% if s.total_runs %}
+          <div class="small" style="margin-top:12px">
+            <span class="mono">{{ s.total_runs }}</span> runs &middot;
+            <span class="mono">{{ s.pass_rate | pct }}</span> green over the last {{ s.runs_in_window }}
+            {%- if s.cost_usd %} &middot; <span class="mono">${{ '%.2f' | format(s.cost_usd) }}</span>{% endif %}
+          </div>
+        {% else %}
+          <div class="small muted" style="margin-top:12px">Waiting for its first run.</div>
+        {% endif %}
+      </a>
+    {% endfor %}
+  </div>
+{% endif %}
+{% endblock %}

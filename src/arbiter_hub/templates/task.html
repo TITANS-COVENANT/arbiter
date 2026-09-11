@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}{{ task_id }} &middot; {{ project.name }}{% endblock %}
+
+{% block content %}
+<div class="breadcrumb">
+  <a href="/">Projects</a> / <a href="{{ url }}">{{ project.name }}</a> / task
+</div>
+
+<div class="spread">
+  <div>
+    <h1 class="mono" style="font-size:22px">{{ task_id }}</h1>
+    <p class="lede" style="margin-bottom:0">
+      {% if streak > 1 %}
+        Flagged in the last {{ streak }} runs in a row.
+      {% elif streak == 1 %}
+        Flagged in the most recent run.
+      {% else %}
+        Not flagged in the most recent run.
+      {% endif %}
+    </p>
+  </div>
+  {% if stat %}<span class="verdict {{ stat.label }}" style="font-size:13px">{{ stat.label }}</span>{% endif %}
+</div>
+
+{% if stat %}
+<div class="grid cols-4" style="margin-top:22px">
+  <div class="stat">
+    <div class="label">Flagged</div>
+    <div class="value">{{ stat.flagged }}/{{ stat.runs }}</div>
+    <div class="sub">{{ stat.flag_rate | pct }} of recent runs</div>
+  </div>
+  <div class="stat">
+    <div class="label">Changed its mind</div>
+    <div class="value">{{ stat.flips }}x</div>
+    <div class="sub">{{ stat.flip_rate | pct }} of run-to-run pairs</div>
+  </div>
+  <div class="stat">
+    <div class="label">Mean replicates</div>
+    <div class="value">{{ '%.0f' | format(stat.mean_replicates) }}</div>
+    <div class="sub">per decision</div>
+  </div>
+  <div class="stat">
+    <div class="label">Latest delta</div>
+    <div class="value">{{ stat.last_delta | delta }}</div>
+    <div class="sub">candidate minus baseline</div>
+  </div>
+</div>
+
+{% if stat.is_chronic %}
+<div class="note warn" style="margin-top:18px">
+  <strong>Chronically flagged.</strong> This has come back red in
+  {{ stat.flagged }} of the last {{ stat.runs }} runs without flipping about. That
+  pattern is a regression that shipped and stayed, not an unstable test. It will
+  keep failing the gate until someone fixes it or the expectation changes.
+</div>
+{% elif stat.is_flaky %}
+<div class="note warn" style="margin-top:18px">
+  <strong>Flaky.</strong> The verdict has changed {{ stat.flips }} times across
+  {{ stat.runs }} runs. Before treating the next red as a real regression, it is
+  worth asking whether this task's signal is stable enough to gate on: check that
+  the seed reaches everything random in the run, or raise
+  <span class="mono">max_replicates</span> for it.
+</div>
+{% endif %}
+{% endif %}
+
+<h2>Verdict history</h2>
+<div class="spark" style="margin-bottom:16px">
+  {% for task, run in history | reverse %}
+    <i class="{{ 'fail' if task.flagged else run.verdict }}"
+       title="{{ run.created_at.strftime('%d %b %H:%M') }} &middot; {{ 'flagged' if task.flagged else 'clear' }}"></i>
+  {% endfor %}
+</div>
+
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>When</th><th>This task</th><th>Run</th><th>Source</th>
+        <th class="num">Baseline</th><th class="num">Candidate</th>
+        <th class="num">Broke</th><th class="num">Fixed</th>
+        <th class="num">Replicates</th><th class="num">e-value</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for task, run in history %}
+      <tr>
+        <td class="small">{{ run.created_at.strftime('%d %b %H:%M') }}</td>
+        <td>
+          {% if task.flagged %}<span class="verdict fail">flagged</span>
+          {% elif task.verdict == 'pass' %}<span class="verdict pass">cleared</span>
+          {% else %}<span class="verdict stable">no evidence</span>{% endif %}
+        </td>
+        <td><a href="{{ url }}/runs/{{ run.id }}" class="small">#{{ run.id }}</a></td>
+        <td class="small">
+          {%- if run.pr_number %}PR #{{ run.pr_number }}
+          {%- elif run.branch %}{{ run.branch }}
+          {%- else %}&mdash;{% endif %}
+        </td>
+        <td class="num">{{ task.baseline_rate | pct }}</td>
+        <td class="num">{{ task.candidate_rate | pct }}</td>
+        <td class="num">{{ task.regressions }}</td>
+        <td class="num">{{ task.improvements }}</td>
+        <td class="num">{{ task.replicates }}</td>
+        <td class="num">{{ '%.1f' | format(task.e_value) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
