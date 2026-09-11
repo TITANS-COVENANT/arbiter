@@ -43,11 +43,51 @@ def _spec(**overrides: Any) -> ScenarioSpec:
     return ScenarioSpec(**{**BASE, **overrides})
 
 
+def render_table(path: str) -> str:
+    """Render a saved results file as the Markdown table the README carries.
+
+    Kept here rather than in a separate script so the published numbers are
+    always a mechanical transform of the measurements, never retyped.
+    """
+    with open(path, encoding="utf-8") as fh:
+        results = json.load(fh)
+    rows = [
+        "| scenario | trials | FDR | clean builds falsely flagged | regressions caught "
+        "| replicates | vs. fixed sample |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    for record in results["scenarios"].values():
+        caught = (
+            f"{record['per_task_power']:.0%} of tasks, {record['detection_rate']:.0%} of builds"
+            if record["n_regressed"]
+            else "n/a"
+        )
+        rows.append(
+            f"| {record['description']} "
+            f"| {record['n_trials']} "
+            f"| {record['fdr']:.3f} "
+            f"| {record['any_false_flag_rate']:.1%} "
+            f"| {caught} "
+            f"| {record['mean_replicates']:,.0f} "
+            f"| {record['savings']:+.0%} |"
+        )
+    return "\n".join(rows)
+
+
 async def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", default="benchmarks/results.json")
     parser.add_argument("--scale", type=float, default=1.0, help="scale all trial counts")
+    parser.add_argument(
+        "--table",
+        metavar="RESULTS_JSON",
+        help="render a saved results file as Markdown and exit, without measuring anything",
+    )
     args = parser.parse_args()
+
+    if args.table:
+        print(render_table(args.table))
+        return
 
     def trials(n: int) -> int:
         return max(5, int(n * args.scale))

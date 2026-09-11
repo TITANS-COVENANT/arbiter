@@ -293,8 +293,13 @@ async def run_gate(
                     test.record_infra_error()
                     continue
                 test.observe(cand_outcome, base_outcome)
-                if store is not None:
-                    seed = seed_for(task_id, replicate, cfg.seed_salt)
+                if store is None:
+                    continue
+                # Only write back what was actually executed. The insert is
+                # idempotent either way, but re-gating a fully cached suite would
+                # otherwise issue thousands of statements that change nothing.
+                seed = seed_for(task_id, replicate, cfg.seed_salt)
+                if (task_id, replicate) not in cached_baseline:
                     store.record_run(
                         variant_id=baseline_variant,
                         suite=cfg.name,
@@ -303,6 +308,7 @@ async def run_gate(
                         seed=seed,
                         outcome=base_outcome,
                     )
+                if (task_id, replicate) not in cached_candidate:
                     store.record_run(
                         variant_id=candidate_variant,
                         suite=cfg.name,
